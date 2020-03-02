@@ -8,9 +8,9 @@ import struct
 
 #master
 #poxim 3.0
-arquivo_entrada1 = open(sys.argv[1], 'r')
+arquivo_entrada1 = open("entrada.txt", 'r')
 arquivo_entrada = arquivo_entrada1.readlines()
-arquivo_saida = open(sys.argv[2], 'w')
+arquivo_saida = open("saida.txt", 'w')
 
 
 #transforma em hexa de 32 bits
@@ -354,10 +354,10 @@ class interuption_hwe():                   # classe [INTERRUPTIO HARDWARE]
     
     def set_opcode(self):
         lista = list(self.registradores[4])
-        print(len(lista))
+       
         for i in range(len(lista)):
             if i == 26:
-                print(lista[i])
+               
                 continue
             else:
                 lista[i] = "0"
@@ -987,7 +987,6 @@ def arredondamento():
 def hardware_2():
     global ciclo_fpu, cpu_pc
     hardware_3(1)
-    print(registradores_hwe[4][25:])
     obj_interrupt_hwe.set_opcode()
     obj_interrupt_hwe.set_st("1")
     cpu_pc = int(0x00000014)
@@ -2051,11 +2050,12 @@ def ret (instrucao, memoria, registrador):
     global cpu_pc
     p = int(registrador[pc], 2)
     SP = int(registrador[sp], 2) + 4
+    
     objregistradores.setRegistradorSP(SP)
     rsp = int(registrador[sp], 2)
 
     cpu_pc = int(converteListastr(memoria[rsp: rsp + 4]), 2)
-    print(memoria[rsp: rsp + 4])
+    
     objregistradores.setRegistradorPC(cpu_pc)
     coluna2 = f"ret".ljust(ajuste)
     coluna3 = f"PC=MEM[{hex32(SP)}]={hex32(cpu_pc)}"
