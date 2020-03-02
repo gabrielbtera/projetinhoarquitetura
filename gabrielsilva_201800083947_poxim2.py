@@ -7,7 +7,7 @@ import struct
 
 
 #master
-#poxim 3.0
+#poxim 2.1
 arquivo_entrada1 = open("entrada.txt", 'r')
 arquivo_entrada = arquivo_entrada1.readlines()
 arquivo_saida = open("saida.txt", 'w')
