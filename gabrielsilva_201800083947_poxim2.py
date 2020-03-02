@@ -8,9 +8,9 @@ import struct
 
 #master
 #poxim 3.0
-arquivo_entrada1 = open("1_exemplo.txt", 'r')
+arquivo_entrada1 = open(sys.argv[1], 'r')
 arquivo_entrada = arquivo_entrada1.readlines()
-arquivo_saida = open("arquivo_saida.txt", 'w')
+arquivo_saida = open(sys.argv[2], 'w')
 
 
 #transforma em hexa de 32 bits
