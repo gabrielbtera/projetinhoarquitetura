@@ -161,8 +161,14 @@ def extrai_ieee_754(binario):
     return ((-1) ** int(binario[0]))* (1 + converte_mantissa(binario)) * 2 ** converte_expoente(binario)
 
 
-#########################################################################################################
-
+############################################ funcoes da cash ###########################################################
+def inicializa_cash():
+    lista_fim = dict()
+    for i in range(0, 8):
+        lista = [(i, [False, None, 0, 1, 2, 3])]
+        lista_fim[bin(i)[2:].zfill(3)] = lista
+    return lista_fim
+#########################################################################################################################
 
 #32 registradores sendo R28=IR, R29=PC, R30=SP, R31=SR, 
 class Registradores():
@@ -435,8 +441,6 @@ var_terminal = int(0x8888888B)
 
 lista_fpu = [i for i in range(int(0x80808880), int(0x8080888C) + 4)]
 
-
-
 fpu_x = 1
 fpu_y = 2
 fpu_z = 3
@@ -444,6 +448,11 @@ fpu_control = 4
 
 verifica_x = False
 verifica_y = False
+
+# inicializacao de ambas as cash's
+cash_instrucao = inicializa_cash()
+cash_dado = inicializa_cash()
+
 
 ############################################## fucoes de uso geral#
 def arredondamento_n(n):
@@ -1050,8 +1059,28 @@ def print_terminal():
         arquivo_saida.write(f"{s}")
 
 
-################################################################################################################################
+############################################  UNIDADE 3  #################################################################
+cache = dict()
 
+
+
+def read_hit(registrador):
+    pass
+
+
+def read_miss(registrador):
+    pass
+
+
+def write_hit(registrador):
+    pass
+
+
+def write_miss(registrador):
+    pass
+
+
+##########################################################################################################################
 
 # Operação de atribuição imediata (mov) (Sem extensão de sinal)
 def mov(registradores, instrucao):
