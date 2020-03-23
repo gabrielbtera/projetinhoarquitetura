@@ -461,8 +461,11 @@ verifica_y = False
 cash_instrucao = inicializa_cash()
 cash_dado = inicializa_cash()
 
-acertos_cash = 0
-erros_cash = 0
+acertos_cash_I = 0
+erros_cash_I = 0
+acertos_cash_D = 0
+erros_cash_D = 0
+
 
 ############################################## fucoes de uso geral#
 def arredondamento_n(n):
@@ -670,15 +673,240 @@ def chamaIndiciesDeR(memoria, instrucao, comando):
         return 0
 
 
+############################################  UNIDADE 3  #################################################################
+def pega_linha(regs):
+    return regs[25:28]
+
+
+def pega_id(regs):
+    return regs[:25]
+
+
+def pega_palavra(regs):
+    return regs[28:30]
+
+
+def incrementa_Idade(cash, registIR):
+    linha = pega_linha(registIR[pc])
+    chaves = cash.keys()
+    for chave in chaves:
+        if cash[chave][0][1]:
+            if cash[chave][0][0] <= 7:
+                idade1 = cash[chave][0][0] + 1
+                cash[chave][0][0] = idade1
+                
+        if cash[chave][1][1]:
+            if cash[chave][1][0] <= 7:
+                idade1 = cash[chave][1][0] + 1
+                cash[chave][1][0] = idade1
+    
+
+def busca_mem(regIR):
+    endereco = int(regIR, 2)
+    while endereco % 16 != 0:
+        endereco -= 1
+    
+    lista_mem = list()
+    for i in range(4):
+        lista_mem.append(converteListastr(memoria_32kbys[endereco : endereco + 4]))
+        endereco += 4
+    return lista_mem
+
+def busca_escreve_mem():
+    pass
+
+def processamento(item, linha_atual, identificador, dados_mem): #opcao = "+" ou "-"
+    linha_atual[item][0] = 0
+    linha_atual[item][1] = True
+    linha_atual[item][2] = identificador
+    c = 3
+    for data in dados_mem:
+        linha_atual[item][c] = data
+        c += 1
+    return linha_atual
+
+
+def pega_data_cash(cash, registrador, identificador, indice):
+    linha = pega_linha(registrador)
+    dados_mem = cash[linha][indice][3:]
+    return dados_mem
+
+
+def read_hit(cash, registrador, identificador, opc, indice):
+    global acertos_cash_I, acertos_cash_D
+    if opc == "D":
+        acertos_cash_D += 1
+    else:
+        acertos_cash_I += 1
+    linha = pega_linha(registrador)
+    linha1 = int(linha, 2)
+    val1 = int(cash[linha][0][1])
+    val2 = int(cash[linha][1][1])
+    cp = int(registrador, 2)
+
+    dados_mem = pega_data_cash(cash, registrador, identificador, indice)
+    dados_mem1 = ""
+    for i in dados_mem:
+        dados_mem1 += hex32(int(i,2)) + ","
+    dados_mem1 = dados_mem1.rstrip(",")
+
+    dados = str(dados_mem1).replace(" ", "").lstrip("[").rstrip("]")
+    coluna3 = f"ID={hex24(int(identificador, 2))},DATA=" + "{" + dados + "}"
+    coluna2 = f"{opc}_read_hit [{linha1}]->[{indice}]".ljust(ajuste)
+    arquivo_saida.write(f"{hex32(cp)}:\t{coluna2}{coluna3}\n")
+
+
+def read_miss(cash, registrador, opc): #opc I D
+    global erros_cash_D, erros_cash_I
+    if opc == "D":
+        erros_cash_D += 1
+    else:
+        erros_cash_I += 1
+    linha1 = int(pega_linha(registrador), 2)
+    linha = pega_linha(registrador)
+    val1 = int(cash[linha][0][1])
+    val2 = int(cash[linha][1][1])
+    cp = int(registrador, 2)
+    if cash[linha][0][2] != None:
+        idem1 = int(cash[linha][0][2], 2)
+    if cash[linha][1][2] != None:
+        idem2 = int(cash[linha][1][2], 2)
+    if cash[linha][0][2] == None:
+        idem1 = 0
+    if cash[linha][1][2] == None:
+        idem2 = 0
+    
+    coluna3 = "[0]{" + f"VAL={val1},AGE={0},ID={hex24(idem1)}" + "}" + ",[1]{" + f"VAL={val2},AGE={0},ID={hex24(idem2)}" + "}\n"
+    coluna2 = f"{opc}_read_miss [{linha1}]".ljust(ajuste)
+    arquivo_saida.write(f"{hex32(cp)}:\t{coluna2}{coluna3}")
+
+
+def substitui_LRU(cash, registrador, campo):
+    registrador = registrador
+    identificador = pega_id(registrador)
+    linha = pega_linha(registrador)
+    dados_mem = busca_mem(registrador)
+    
+    linha_atual = cash[linha]
+    
+    if not linha_atual[0][1] and not linha_atual[1][1]:
+        read_miss(cash, registrador, campo)
+        cash[linha] = processamento(0, linha_atual, identificador, dados_mem)
+    elif linha_atual[0][1] and identificador != linha_atual[0][2] and not linha_atual[1][1]:
+        read_miss(cash, registrador, campo)
+        cash[linha] = processamento(1, linha_atual, identificador, dados_mem)
+    elif linha_atual[1][1] and identificador != linha_atual[1][2] and not linha_atual[0][1]:
+        read_miss(cash, registrador, campo)
+        cash[linha] = processamento(0, linha_atual, identificador, dados_mem)
+
+    elif linha_atual[1][1] and linha_atual[0][1] and identificador != linha_atual[1][2] and identificador != linha_atual[0][2]:
+        read_miss(cash, registrador, campo)
+        if linha_atual[1][0] > linha_atual[0][0]:
+            cash[linha] = processamento(1, linha_atual, identificador, dados_mem)
+        if linha_atual[1][0] < linha_atual[0][0]:
+            cash[linha] = processamento(0, linha_atual, identificador, dados_mem) # adicionar a condição de igual
+    
+    elif linha_atual[0][1] and identificador == linha_atual[0][2]:
+        read_hit(cash, registrador, identificador, campo, 0)
+    elif linha_atual[1][1] and identificador == linha_atual[1][2]:
+        read_hit(cash, registrador, identificador, campo, 1)
+
+
+def main_cash(cash, registrador, campo):
+    linha = pega_linha(registrador)
+    idem = pega_id(registrador)
+    substitui_LRU(cash, registrador, campo)
+
+
+def write_miss(cash, registrador, opc):
+    global erros_cash_D
+    erros_cash_D += 1
+    linha1 = int(pega_linha(registrador), 2) 
+    linha = pega_linha(registrador)
+    val1 = int(cash[linha][0][1])
+    val2 = int(cash[linha][1][1])
+    cp = int(registrador, 2)
+    if cash[linha][0][2] != None:
+        idem1 = int(cash[linha][0][2], 2)
+    if cash[linha][1][2] != None:
+        idem2 = int(cash[linha][1][2], 2)
+    if cash[linha][0][2] == None:
+        idem1 = 0
+    if cash[linha][1][2] == None:
+        idem2 = 0
+    
+    coluna3 = "[0]{" + f"VAL={val1},AGE={0},ID={hex24(idem1)}" + "}" + "[1]{" + f"VAL={val2},AGE={0},ID={hex24(idem2)}" + "}\n"
+    coluna2 = f"{opc}_write_miss [{linha1}]".ljust(ajuste)
+    arquivo_saida.write(f"{hex32(cp)}:\t{coluna2}{coluna3}")
+
+
+def write_hit(cash, registrador, identificador, opc, indice):
+    global acertos_cash_D
+    acertos_cash_D += 1
+    linha = pega_linha(registrador)
+    linha1 = int(linha, 2)
+    val1 = int(cash[linha][0][1])
+    val2 = int(cash[linha][1][1])
+    cp = int(registrador, 2)
+
+    dados_mem = pega_data_cash(cash, registrador, identificador, indice)
+    dados_mem1 = ""
+    for i in dados_mem:
+        dados_mem1 += hex32(int(i,2)) + ","
+    dados_mem1 = dados_mem1.rstrip(",")
+
+    dados = str(dados_mem1).replace(" ", "").lstrip("[").rstrip("]")
+    coluna3 = f"ID={hex24(int(identificador, 2))},DATA=" + "{" + dados + "}"
+    coluna2 = f"{opc}_write_hit [{linha1}]->[{indice}]".ljust(ajuste)
+    arquivo_saida.write(f"{hex32(cp)}:\t{coluna2}{coluna3}\n")
+
+def substitui_write(cash, registrador, campo):
+    registrador = registrador
+    identificador = pega_id(registrador)
+    linha = pega_linha(registrador)
+    dados_mem = busca_mem(registrador)
+    
+    linha_atual = cash[linha]
+    
+   
+    
+    if linha_atual[0][1] and identificador == linha_atual[0][2]:
+        write_hit(cash, registrador, identificador, campo, 0)
+    elif linha_atual[1][1] and identificador == linha_atual[1][2]:
+        write_hit(cash, registrador, identificador, campo, 1)
+    else:
+        write_miss(cash, registrador, campo)
+
+
+def percent_hit():
+    total_I = acertos_cash_I + erros_cash_I
+    total_D = acertos_cash_D + erros_cash_D
+    perc_I = acertos_cash_I * 100 / total_I
+    perc_D = acertos_cash_D * 100 / total_D
+    arquivo_saida.write("[CASH]\nD_hit_rate: %.2f \nI_hit_rate: %.2f\n"%(perc_D, perc_I))
+##########################################################################################################################
+
 ############################################################### INTERRUPCAO POR SOFTWARE #####################################################
 var_checa_desvios = False
 var_desvioativo = False
 
+lista_pega_nao_masc= list()
+def printa_write_depois():
+    global lista_pega_nao_masc
+    for i in lista_pega_nao_masc:
+        substitui_write(cash_dado, bin(i)[2:].zfill(32), "D")
+    lista_pega_nao_masc = list()
+
+
 # interrupacao nao mascarada
+
 def interrupt_nao_masc(registradores, instrucao, memoria):
     SPv = int(registradores[sp], 2)
+    lista_pega_nao_masc.append(SPv)
     objmemoria.setRegistradorMemoria(SPv, pc, 4); SPv -= 4
+    lista_pega_nao_masc.append(SPv)
     objmemoria.setRegistradorMemoria2(SPv, cr); SPv -= 4 
+    lista_pega_nao_masc.append(SPv)
     objmemoria.setRegistradorMemoria2(SPv, ipc); SPv -= 4
     objregistradores.setRegistradorSP(SPv)
     
@@ -703,10 +931,14 @@ def interrupt_masc(registradores, instrucao, memoria):
 
 def inter_dog(registradores, instrucao, memoria):
     global checa_dog
+    arquivo_saida.write("[HARDWARE INTERRUPTION 1]\n")
     if checa_dog:
         SPv = int(registradores[sp], 2)
+        substitui_write(cash_dado,bin(SPv)[2:].zfill(32) , "D")
         objmemoria.setRegistradorMemoria2(SPv, pc) ; SPv -= 4
+        substitui_write(cash_dado, bin(SPv)[2:].zfill(32), "D")
         objmemoria.setRegistradorMemoria2(SPv, cr)   ; SPv -= 4
+        substitui_write(cash_dado, bin(SPv)[2:].zfill(32), "D")
         objmemoria.setRegistradorMemoria2(SPv, ipc)  ; SPv -= 4
         objregistradores.setRegistradorSP(SPv)
     else:
@@ -777,6 +1009,7 @@ def inT(registradores, instrucao):
         coluna3 = f"CR={hex32(int(antigo_cr, 2))},PC={hex32(p + 4)}\n"
         msg = f"[SOFTWARE INTERRUPTION]\n"
         arquivo_saida.write(f"{hex32(p)}:\t{coluna2}{coluna3}{msg}")
+        printa_write_depois()
 
     else:
         registradores[cr] = lReadS(instrucao).zfill(32)
@@ -811,8 +1044,8 @@ def divisao_por_zero(registradores, instruncao): # II unidade
         registradores[cr] = "0".zfill(32) 
         registradores[ipc] = registradores[pc]
         cpu_pc = int("0x00000008", 16)
-        #msg = "[SOFTWARE INTERRUPTION]\n"
-        arquivo_saida.write()
+        msg = "[SOFTWARE INTERRUPTION]\n"
+        arquivo_saida.write(msg)
         
     
     
@@ -830,7 +1063,7 @@ def fuction_watch_dog():
         registradores_32[ipc] = registradores_32[pc]
         cpu_pc = int("0x00000010", 16)
         obj_interrupt_hwe.set_watch_dog("0".zfill(32), False)
-        arquivo_saida.write("[HARDWARE INTERRUPTION 1]\n")
+        
         checa_dog = False
         
         
@@ -1060,153 +1293,6 @@ def print_terminal():
     else:
         arquivo_saida.write(f"{s}")
 
-
-############################################  UNIDADE 3  #################################################################
-def pega_linha(regs):
-    return regs[25:28]
-
-
-def pega_id(regs):
-    return regs[:25]
-
-
-def pega_palavra(regs):
-    return regs[28:30]
-
-
-def incrementa_Idade(cash, registIR):
-    linha = pega_linha(registIR[pc])
-    chaves = cash.keys()
-    for chave in chaves:
-        if cash[chave][0][1]:
-            idade1 = cash[chave][0][0] + 1
-            cash[chave][0][0] = idade1
-                
-        if cash[chave][1][1]:
-            idade1 = cash[chave][0][0] + 1
-            cash[chave][1][0] = idade1
-    
-
-def busca_mem(regIR):
-    endereco = int(regIR, 2)
-    while endereco % 16 != 0:
-        endereco -= 1
-    
-    lista_mem = list()
-    for i in range(4):
-        lista_mem.append(converteListastr(memoria_32kbys[endereco : endereco + 4]))
-        endereco += 4
-    return lista_mem
-
-
-def processamento(item, linha_atual, identificador, dados_mem): #opcao = "+" ou "-"
-    linha_atual[item][0] = 0
-    linha_atual[item][1] = True
-    linha_atual[item][2] = identificador
-    c = 3
-    for data in dados_mem:
-        linha_atual[item][c] = data
-        c += 1
-    return linha_atual
-
-
-def pega_data_cash(cash, registrador, identificador, indice):
-    linha = pega_linha(registrador)
-    dados_mem = cash[linha][indice][3:]
-    return dados_mem
-
-
-def read_hit(cash, registrador, identificador, opc, indice):
-    global acertos_cash
-    acertos_cash += 1
-    linha = pega_linha(registrador)
-    linha1 = int(linha, 2)
-    val1 = int(cash[linha][0][1])
-    val2 = int(cash[linha][1][1])
-    cp = int(registrador, 2)
-
-    dados_mem = pega_data_cash(cash, registrador, identificador, indice)
-    dados_mem1 = ""
-    for i in dados_mem:
-        dados_mem1 += hex32(int(i,2)) + ","
-    dados_mem1 = dados_mem1.rstrip(",")
-
-    dados = str(dados_mem1).replace(" ", "").lstrip("[").rstrip("]")
-    coluna3 = f"ID={hex24(int(identificador, 2))},DATA=" + "{" + dados + "}"
-    coluna2 = f"{opc}_read_hit [{linha1}]->[{indice}]".ljust(ajuste)
-    arquivo_saida.write(f"{hex32(cp)}:\t{coluna2}{coluna3}\n")
-
-
-def read_miss(cash, registrador, opc): #opc I D
-    global erros_cash
-    erros_cash += 1
-    linha1 = int(pega_linha(registrador), 2)
-    linha = pega_linha(registrador)
-    val1 = int(cash[linha][0][1])
-    val2 = int(cash[linha][1][1])
-    cp = int(registrador, 2)
-    if cash[linha][0][2] != None:
-        idem1 = int(cash[linha][0][2], 2)
-    if cash[linha][1][2] != None:
-        idem2 = int(cash[linha][1][2], 2)
-    if cash[linha][0][2] == None:
-        idem1 = 0
-    if cash[linha][1][2] == None:
-        idem2 = 0
-    
-    coluna3 = "[0]{" + f"VAL={val1},AGE={0},ID={hex24(idem1)}" + "}" + "[1]{" + f"VAL={val2},AGE={0},ID={hex24(idem2)}" + "}\n"
-    coluna2 = f"{opc}_read_miss [{linha1}]".ljust(ajuste)
-    arquivo_saida.write(f"{hex32(cp)}:\t{coluna2}{coluna3}")
-
-
-def substitui_LRU(cash, registrador, campo):
-    registrador = registrador
-    identificador = pega_id(registrador)
-    linha = pega_linha(registrador)
-    dados_mem = busca_mem(registrador)
-    
-    linha_atual = cash[linha]
-    
-    if not linha_atual[0][1] and not linha_atual[1][1]:
-        read_miss(cash, registrador, campo)
-        cash[linha] = processamento(0, linha_atual, identificador, dados_mem)
-    elif linha_atual[0][1] and identificador != linha_atual[0][2] and not linha_atual[1][1]:
-        read_miss(cash, registrador, campo)
-        cash[linha] = processamento(1, linha_atual, identificador, dados_mem)
-    elif linha_atual[1][1] and identificador != linha_atual[1][2] and not linha_atual[0][1]:
-        read_miss(cash, registrador, campo)
-        cash[linha] = processamento(0, linha_atual, identificador, dados_mem)
-
-    elif linha_atual[1][1] and linha_atual[0][1] and identificador != linha_atual[1][2] and identificador != linha_atual[0][2]:
-        read_miss(cash, registrador, campo)
-        if linha_atual[1][0] > linha_atual[0][0]:
-            cash[linha] = processamento(1, linha_atual, identificador, dados_mem)
-        if linha_atual[1][0] < linha_atual[0][0]:
-            cash[linha] = processamento(0, linha_atual, identificador, dados_mem)
-    
-    elif linha_atual[0][1] and identificador == linha_atual[0][2]:
-        read_hit(cash, registrador, identificador, campo, 0)
-    elif linha_atual[1][1] and identificador == linha_atual[1][2]:
-        read_hit(cash, registrador, identificador, campo, 1)
-
-
-def main_cash(cash, registrador, campo):
-    linha = pega_linha(registrador)
-    idem = pega_id(registrador)
-    substitui_LRU(cash, registrador, campo)
-    
-        
-
-
-def write_hit(registrador):
-    pass
-
-
-def write_miss(registrador):
-    pass
-
-
-##########################################################################################################################
 
 # Operação de atribuição imediata (mov) (Sem extensão de sinal)
 def mov(registradores, instrucao):
@@ -2002,6 +2088,7 @@ def leitura_escritaDaMemoria(registrador, memoria, instrucao, comando):
             terminal(mem, registrador[Rz])
         
         else:
+            substitui_write(cash_dado, bin(mem)[2:].zfill(32), "D")
             memoria = funcaoEscrevenaRgistradorMemoria(registrador[Rz], memoria, mem, 8)
             registrador[Rz] = procuraIndiceMemoria(memoria, mem , mem)
             coluna2 = f"s8 [{nomeRgsmin(registrador,int(xRead(instrucao), 2))}+{int(Rl, 2)}],{nomeRgsmin(registrador, Rz)}".ljust(ajuste)
@@ -2020,6 +2107,7 @@ def leitura_escritaDaMemoria(registrador, memoria, instrucao, comando):
             function_FPU(mem, registrador[Rz], comando)
         
         else:
+            substitui_write(cash_dado, bin(mem)[2:].zfill(32), "D")
             memoria = funcaoEscrevenaRgistradorMemoria(registrador[Rz], memoria, mem, 16)
             coluna2 = f"s16 [{nomeRgsmin(registrador,int(xRead(instrucao), 2))}+{int(Rl, 2)}],{nomeRgsmin(registrador, Rz)}".ljust(ajuste)
             coluna3 = f"MEM[{hex32(mem)}]={nomeRgsMai(registrador, Rz)}={hex16(int(converteListastr(memoria[mem : mem + 2]), 2))}\n"
@@ -2038,6 +2126,7 @@ def leitura_escritaDaMemoria(registrador, memoria, instrucao, comando):
             function_FPU(mem, registrador[Rz], comando)
             
         else:
+            substitui_write(cash_dado, bin(mem)[2:].zfill(32), "D")
             memoria = funcaoEscrevenaRgistradorMemoria(registrador[Rz], memoria, mem, 32)
             coluna2 = f"s32 [{nomeRgsmin(registrador,int(xRead(instrucao), 2))}+{int(Rl, 2)}],{nomeRgsmin(registrador, Rz)}".ljust(ajuste)
             coluna3 = f"MEM[{hex32(mem)}]={nomeRgsMai(registrador, Rz)}={hex32(int(converteListastr(memoria[mem : mem + 4]), 2))}\n"
@@ -2455,11 +2544,10 @@ def main():
             break
         
         else:
-            
             testesInstrucoes(registradores_32, instrucaoAtual, memoria_32kbys)
             if obj_interrupt_hwe.get_watch_dog()[0] == "1":
                 fuction_watch_dog()
-
+    percent_hit()
     arquivo_saida.write("[END OF SIMULATION]\n")
     arquivo_saida.close()
     arquivo_entrada1.close()
