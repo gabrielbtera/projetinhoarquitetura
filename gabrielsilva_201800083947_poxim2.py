@@ -7,10 +7,10 @@ import struct
 
 
 #master
-#poxim 2.1
-arquivo_entrada1 = open("entrada.txt", 'r')
+#poxim 3.0
+arquivo_entrada1 = open(sys.argv[1], 'r')
 arquivo_entrada = arquivo_entrada1.readlines()
-arquivo_saida = open("saida.txt", 'w')
+arquivo_saida = open(sys.argv[2], 'w')
 
 
 #transforma em hexa de 32 bits
@@ -686,19 +686,21 @@ def pega_palavra(regs):
     return regs[28:30]
 
 
-def incrementa_Idade(cash, registIR):
-    linha = pega_linha(registIR[pc])
+def incrementa_Idade(cash):
+    
     chaves = cash.keys()
     for chave in chaves:
         if cash[chave][0][1]:
-            if cash[chave][0][0] <= 7:
+            if cash[chave][0][0] < 255:
                 idade1 = cash[chave][0][0] + 1
                 cash[chave][0][0] = idade1
-                
+
         if cash[chave][1][1]:
-            if cash[chave][1][0] <= 7:
+            if cash[chave][1][0] < 255:
                 idade1 = cash[chave][1][0] + 1
                 cash[chave][1][0] = idade1
+            
+
     
 
 def busca_mem(regIR):
@@ -723,6 +725,7 @@ def processamento(item, linha_atual, identificador, dados_mem): #opcao = "+" ou 
     for data in dados_mem:
         linha_atual[item][c] = data
         c += 1
+    #print( [hex(int(i, 2)) for i in linha_atual[item][3:]])
     return linha_atual
 
 
@@ -743,6 +746,7 @@ def read_hit(cash, registrador, identificador, opc, indice):
     val1 = int(cash[linha][0][1])
     val2 = int(cash[linha][1][1])
     cp = int(registrador, 2)
+    cash[linha][indice][0] = 0
 
     dados_mem = pega_data_cash(cash, registrador, identificador, indice)
     dados_mem1 = ""
@@ -775,8 +779,9 @@ def read_miss(cash, registrador, opc): #opc I D
         idem1 = 0
     if cash[linha][1][2] == None:
         idem2 = 0
-    
-    coluna3 = "[0]{" + f"VAL={val1},AGE={0},ID={hex24(idem1)}" + "}" + ",[1]{" + f"VAL={val2},AGE={0},ID={hex24(idem2)}" + "}\n"
+    age_0 = cash[linha][0][0]
+    age_1 = cash[linha][1][0]
+    coluna3 = "[0]{" + f"VAL={val1},AGE={age_0},ID={hex24(idem1)}" + "}" + ",[1]{" + f"VAL={val2},AGE={age_1},ID={hex24(idem2)}" + "}\n"
     coluna2 = f"{opc}_read_miss [{linha1}]".ljust(ajuste)
     arquivo_saida.write(f"{hex32(cp)}:\t{coluna2}{coluna3}")
 
@@ -792,18 +797,26 @@ def substitui_LRU(cash, registrador, campo):
     if not linha_atual[0][1] and not linha_atual[1][1]:
         read_miss(cash, registrador, campo)
         cash[linha] = processamento(0, linha_atual, identificador, dados_mem)
+        
     elif linha_atual[0][1] and identificador != linha_atual[0][2] and not linha_atual[1][1]:
+       
         read_miss(cash, registrador, campo)
         cash[linha] = processamento(1, linha_atual, identificador, dados_mem)
+        
     elif linha_atual[1][1] and identificador != linha_atual[1][2] and not linha_atual[0][1]:
         read_miss(cash, registrador, campo)
         cash[linha] = processamento(0, linha_atual, identificador, dados_mem)
+        
 
     elif linha_atual[1][1] and linha_atual[0][1] and identificador != linha_atual[1][2] and identificador != linha_atual[0][2]:
         read_miss(cash, registrador, campo)
         if linha_atual[1][0] > linha_atual[0][0]:
             cash[linha] = processamento(1, linha_atual, identificador, dados_mem)
+            
         if linha_atual[1][0] < linha_atual[0][0]:
+            cash[linha] = processamento(0, linha_atual, identificador, dados_mem) # adicionar a condição de igual
+            
+        if linha_atual[1][0] == linha_atual[0][0]:
             cash[linha] = processamento(0, linha_atual, identificador, dados_mem) # adicionar a condição de igual
     
     elif linha_atual[0][1] and identificador == linha_atual[0][2]:
@@ -834,8 +847,10 @@ def write_miss(cash, registrador, opc):
         idem1 = 0
     if cash[linha][1][2] == None:
         idem2 = 0
+    age_0 = cash[linha][0][0]
+    age_1 = cash[linha][1][0]
     
-    coluna3 = "[0]{" + f"VAL={val1},AGE={0},ID={hex24(idem1)}" + "}" + "[1]{" + f"VAL={val2},AGE={0},ID={hex24(idem2)}" + "}\n"
+    coluna3 = "[0]{" + f"VAL={val1},AGE={age_0},ID={hex24(idem1)}" + "}" + ",[1]{" + f"VAL={age_1},AGE={0},ID={hex24(idem2)}" + "}\n"
     coluna2 = f"{opc}_write_miss [{linha1}]".ljust(ajuste)
     arquivo_saida.write(f"{hex32(cp)}:\t{coluna2}{coluna3}")
 
@@ -848,13 +863,16 @@ def write_hit(cash, registrador, identificador, opc, indice):
     val1 = int(cash[linha][0][1])
     val2 = int(cash[linha][1][1])
     cp = int(registrador, 2)
-
+    if opc == "D":
+        incrementa_Idade(cash, )
+    
     dados_mem = pega_data_cash(cash, registrador, identificador, indice)
+    processamento(indice, cash[linha], pega_id(registrador), busca_mem(registrador))# processa na memória
     dados_mem1 = ""
     for i in dados_mem:
         dados_mem1 += hex32(int(i,2)) + ","
     dados_mem1 = dados_mem1.rstrip(",")
-
+      
     dados = str(dados_mem1).replace(" ", "").lstrip("[").rstrip("]")
     coluna3 = f"ID={hex24(int(identificador, 2))},DATA=" + "{" + dados + "}"
     coluna2 = f"{opc}_write_hit [{linha1}]->[{indice}]".ljust(ajuste)
@@ -867,9 +885,6 @@ def substitui_write(cash, registrador, campo):
     dados_mem = busca_mem(registrador)
     
     linha_atual = cash[linha]
-    
-   
-    
     if linha_atual[0][1] and identificador == linha_atual[0][2]:
         write_hit(cash, registrador, identificador, campo, 0)
     elif linha_atual[1][1] and identificador == linha_atual[1][2]:
@@ -917,14 +932,20 @@ def interrupt_masc(registradores, instrucao, memoria):
     if registradores[sr][ie] == "1":
         if var_desvioativo:
             SPv = int(registradores[sp], 2)
+            lista_pega_nao_masc.append(SPv)
             objmemoria.setRegistradorMemoria2(SPv, pc) ; SPv -= 4
+            lista_pega_nao_masc.append(SPv)
             objmemoria.setRegistradorMemoria2(SPv, cr)   ; SPv -= 4
+            lista_pega_nao_masc.append(SPv)
             objmemoria.setRegistradorMemoria2(SPv, ipc)  ; SPv -= 4
             objregistradores.setRegistradorSP(SPv)
         else:
             SPv = int(registradores[sp], 2)
+            lista_pega_nao_masc.append(SPv)
             objmemoria.setRegistradorMemoria(SPv, pc, 4) ; SPv -= 4
+            lista_pega_nao_masc.append(SPv)
             objmemoria.setRegistradorMemoria2(SPv, cr)   ; SPv -= 4
+            lista_pega_nao_masc.append(SPv)
             objmemoria.setRegistradorMemoria2(SPv, ipc)  ; SPv -= 4
             objregistradores.setRegistradorSP(SPv)
 
@@ -953,8 +974,11 @@ def inter_dog(registradores, instrucao, memoria):
 def interrupt_masc_1(registradores, instrucao, memoria):
     if registradores[sr][ie] == "1":
         SPv = int(registradores[sp], 2)
+        lista_pega_nao_masc.append(SPv)
         objmemoria.setRegistradorMemoria(SPv, pc, 4) ; SPv -= 4
+        lista_pega_nao_masc.append(SPv)
         objmemoria.setRegistradorMemoria2(SPv, cr)   ; SPv -= 4
+        lista_pega_nao_masc.append(SPv)
         objmemoria.setRegistradorMemoria2(SPv, ipc)  ; SPv -= 4
         objregistradores.setRegistradorSP(SPv)
         
@@ -964,9 +988,15 @@ def reti(registradores):
     global cpu_pc
     p = cpu_pc - 4
     Spv = int(registradores[sp], 2)
-    Spv += 4 ; objmemoria.setMemoriaNoRegister(Spv, ipc)
-    Spv += 4 ; objmemoria.setMemoriaNoRegister(Spv, cr)
-    Spv += 4 ; objmemoria.setMemoriaNoRegister(Spv, pc)
+    Spv += 4 ; main_cash(cash_dado, bin(Spv)[2:].zfill(32), "D")
+    objmemoria.setMemoriaNoRegister(Spv, ipc)
+    
+    Spv += 4 ;main_cash(cash_dado, bin(Spv)[2:].zfill(32), "D")
+    objmemoria.setMemoriaNoRegister(Spv, cr)
+    
+    Spv += 4 ; main_cash(cash_dado, bin(Spv)[2:].zfill(32), "D")
+    objmemoria.setMemoriaNoRegister(Spv, pc)
+    
     cpu_pc = int(registradores[pc], 2)
     objregistradores.setRegistradorSP(Spv)
 
@@ -1033,6 +1063,7 @@ def instrucao_invalida(registradores, instrucao, memoria):
         registradores[pc] = bin(int(codigo_pc, 16))[2:]
         cpu_pc = int(codigo_pc, 16)
         arquivo_saida.write(f'[INVALID INSTRUCTION @ {hex32(p - 4)}]\n[SOFTWARE INTERRUPTION]\n')
+        printa_write_depois()
 
 
 
@@ -1046,6 +1077,8 @@ def divisao_por_zero(registradores, instruncao): # II unidade
         cpu_pc = int("0x00000008", 16)
         msg = "[SOFTWARE INTERRUPTION]\n"
         arquivo_saida.write(msg)
+        printa_write_depois()
+
         
     
     
@@ -1077,7 +1110,11 @@ def hardware_4(controle):
             var_checa_desvios = True
         instrucaoAtual = pegaIstrucaoMemoria(memoria_32kbys, cpu_pc, cpu_pc + 4)
         objregistradores.setRegistradorIR(instrucaoAtual)
+        
         objregistradores.setRegistradorPC(cpu_pc)
+        main_cash(cash_instrucao, registradores_32[pc], "I")
+        incrementa_Idade(cash_instrucao)
+        incrementa_Idade(cash_dado)
         testesInstrucoes(registradores_32, instrucaoAtual, memoria_32kbys)
         cpu_pc += 4
         p += 4
@@ -1102,15 +1139,19 @@ def hardware_3 (controle):
         instrucaoAtual = pegaIstrucaoMemoria(memoria_32kbys, cpu_pc, cpu_pc + 4)
         objregistradores.setRegistradorIR(instrucaoAtual)
         objregistradores.setRegistradorPC(cpu_pc)
+        main_cash(cash_instrucao, registradores_32[pc], "I")
         cpu_pc = int(registradores_32[pc], 2) + 4
         testesInstrucoes(registradores_32, instrucaoAtual, memoria_32kbys)
         if obj_interrupt_hwe.get_watch_dog()[0] == "1":
             fuction_watch_dog()
+        incrementa_Idade(cash_instrucao)
+        incrementa_Idade(cash_dado)
 
     if controle == 0:
         endereco_pc = cpu_pc
 
     interrupt_masc(registradores_32, registradores_32[ir], memoria_32kbys)
+    
     
   
     registradores_32[ipc] = bin(endereco_pc)[2:].zfill(32)
@@ -1132,12 +1173,14 @@ def add_fpu():
     registradores_hwe[fpu_z]  = ieee_754(float(int(registradores_hwe[fpu_x], 2) + int(registradores_hwe[fpu_y], 2))).zfill(32)
     obj_interrupt_hwe.set_FPU_4("0" * 32, False)
     arquivo_saida.write("[HARDWARE INTERRUPTION 3]\n")
+    printa_write_depois()
 
 def sub_fpu():
     hardware_3(ciclo_fpu)
     registradores_hwe[fpu_z]  = ieee_754(extrai_ieee_754(registradores_hwe[fpu_x]) - extrai_ieee_754(ieee_754(float(int(registradores_hwe[fpu_y], 2)))))
     obj_interrupt_hwe.set_FPU_4("0" * 32, False)
     arquivo_saida.write("[HARDWARE INTERRUPTION 3]\n")
+    printa_write_depois()
     
 
 def mul_fpu():
@@ -1155,6 +1198,7 @@ def mul_fpu():
     registradores_hwe[fpu_z]  = bin(int(struct.pack(">f", x * y).hex(), 16))[2:].zfill(32)
     obj_interrupt_hwe.set_FPU_4("0" * 32, False)
     arquivo_saida.write("[HARDWARE INTERRUPTION 3]\n")
+    printa_write_depois()
 
 
 def div_fpu():
@@ -1174,8 +1218,10 @@ def div_fpu():
         registradores_hwe[fpu_z]  = bin(int(struct.pack(">f", x / y).hex(), 16))[2:].zfill(32)
         obj_interrupt_hwe.set_FPU_4("0" * 32, False)
         arquivo_saida.write("[HARDWARE INTERRUPTION 3]\n")
+        printa_write_depois()
     else:
         arquivo_saida.write("[HARDWARE INTERRUPTION 2]\n")
+        printa_write_depois()
         obj_interrupt_hwe.set_st("1")
         cpu_pc = (0x00000014)
        
@@ -1185,6 +1231,7 @@ def mov_x_fpu():
     registradores_hwe[fpu_x] = registradores_hwe[fpu_z]
     arquivo_saida.write("[HARDWARE INTERRUPTION 4]\n")
     obj_interrupt_hwe.set_FPU_4("0" * 32, False)
+    printa_write_depois()
     
 
 def mov_y_fpu():
@@ -1192,6 +1239,7 @@ def mov_y_fpu():
     registradores_hwe[fpu_y] = registradores_hwe[fpu_z]
     arquivo_saida.write("[HARDWARE INTERRUPTION 4]\n")
     obj_interrupt_hwe.set_FPU_4("0" * 32, False)
+    printa_write_depois()
 
 
 def teto():
@@ -1203,6 +1251,7 @@ def teto():
     registradores_hwe[fpu_z] = bin(ceil(z))[2:].zfill(32)
     arquivo_saida.write("[HARDWARE INTERRUPTION 4]\n")
     obj_interrupt_hwe.set_FPU_4("0" * 32, False)
+    printa_write_depois()
     
 
 def piso():
@@ -1214,6 +1263,7 @@ def piso():
     registradores_hwe[fpu_z] = bin(math.floor(z))[2:].zfill(32)
     arquivo_saida.write("[HARDWARE INTERRUPTION 4]\n")
     obj_interrupt_hwe.set_FPU_4("0" * 32, False)
+    printa_write_depois()
 
 
 def arredondamento():
@@ -1226,6 +1276,7 @@ def arredondamento():
     obj_interrupt_hwe.set_opcode()
     arquivo_saida.write("[HARDWARE INTERRUPTION 4]\n")
     obj_interrupt_hwe.set_FPU_4("0" * 32, False)
+    printa_write_depois()
 
 
 def hardware_2():
@@ -1235,6 +1286,7 @@ def hardware_2():
     obj_interrupt_hwe.set_st("1")
     cpu_pc = int(0x00000014)
     arquivo_saida.write("[HARDWARE INTERRUPTION 2]\n")
+    printa_write_depois()
     
 
 def op_code_fpu(registradores):
@@ -1612,13 +1664,14 @@ def divs(registradores, instrucao):
         arquivo_saida.write(f"{hex32(int(registradores_32[pc], 2)) }:\t{coluna2}{coluna3},SR={hex32(int(registradores_32[sr],2))}\n")
     else:
         # campos afetados
-        divisao_por_zero(registradores, instrucao)
+        
         #msg = "[SOFTWARE INTERRUPTION]\n"
         rx = int(xRead(instrucao),2)
         ry = int(yRead(instrucao),2)
         coluna2 = f"divs {nomeRgsmin(registradores_32,Rl)},{nomeRgsmin(registradores_32,Rz)},{nomeRgsmin(registradores_32, rx)},{nomeRgsmin(registradores_32, ry)}".ljust(ajuste)
         coluna3 = f"{nomeRgsMai(registradores_32,Rl)}={nomeRgsMai(registradores_32, rx)}%{nomeRgsMai(registradores_32, ry)}={hex32(int(registradores[Rl],2))},{nomeRgsMai(registradores_32,Rz)}={nomeRgsMai(registradores_32, rx)}/{nomeRgsMai(registradores_32, ry)}={hex32(int(registradores[Rz], 2))}"
         arquivo_saida.write(f"{hex32(int(registradores_32[pc], 2)) }:\t{coluna2}{coluna3},SR={hex32(int(registradores_32[sr],2))}\n")
+        divisao_por_zero(registradores, instrucao)
         
         
 
@@ -2277,6 +2330,7 @@ def call_F(instrucao, memoria, registrador):
 def call_S(instrucao, memoria, registrador):
     global cpu_pc
     SPv = int(registrador[sp], 2)
+    
     objmemoria.setRegistradorMemoria(int(registrador[sp], 2), pc, 4)
 
     operacao = bin(int(registrador[sp], 2) - 4 )[2:]
@@ -2289,7 +2343,7 @@ def call_S(instrucao, memoria, registrador):
     rls = c_int32(int(Ri, 2)).value
     cpu_pc = p + 4 + (c_int32(int(Ri, 2) << 2).value)
     objregistradores.setRegistradorPC(cpu_pc - 4)
-    
+    substitui_write(cash_dado, bin(SPv)[2:].zfill(32), "D")
     coluna2 = f"call {rls}".ljust(ajuste)
     coluna3 = f"PC={hex32(cpu_pc)},MEM[{hex32(SPv)}]={hex32(p + 4)}"
     arquivo_saida.write(f"{hex32(p)}:\t{coluna2}{coluna3}\n")
@@ -2299,7 +2353,7 @@ def ret (instrucao, memoria, registrador):
     global cpu_pc
     p = int(registrador[pc], 2)
     SP = int(registrador[sp], 2) + 4
-    
+    main_cash(cash_dado, bin(SP)[2:].zfill(32), "D")
     objregistradores.setRegistradorSP(SP)
     rsp = int(registrador[sp], 2)
 
@@ -2328,7 +2382,9 @@ def push (instrucao, memoria, registrador):
             coletahex.append(hex32(c_uint32(int(registrador[int(j,2)], 2)).value))
             coleta_indice.append(int(j,2))
             objmemoria.setRegistradorMemoria2(SPv, int(j,2))
+            lista_pega_nao_masc.append(SPv)
             SPv -= 4
+            
         else:
             break
 
@@ -2348,15 +2404,18 @@ def push (instrucao, memoria, registrador):
     for i in coletahex:
         lista_hexas += i + ","
     lista_hexas = "{" + lista_hexas.rstrip(",") + "}"
+    printa_write_depois()
     if len(coleta_indice) == 0:
         coluna2 = f"push -".ljust(ajuste)
         coluna3 = f"MEM[{hex32(SPv1)}]{lista_hexas}={maiusculos}"
         arquivo_saida.write(f"{hex32(int(registrador[pc], 2))}:\t{coluna2}{coluna3}\n")
+        
 
     else:
         coluna2 = f"push {minusculos}"
         coluna3 = f"MEM[{hex32(SPv1)}]{lista_hexas}={maiusculos}"
         arquivo_saida.write(f"{hex32(int(registrador[pc], 2))}:\t{coluna2}{coluna3}\n")
+        
         
 
 def poP(instrucao, memoria, registrador):
@@ -2375,6 +2434,7 @@ def poP(instrucao, memoria, registrador):
     for j in lista:
         if int(j, 2) != 0:
             SPv += 4
+            main_cash(cash_dado, bin(SPv)[2:].zfill(32), "D")
             registrador[int(j,2)] = pegaIstrucaoMemoria(memoria, SPv, SPv + 4)
             coletahex.append(hex32(c_uint32(int(registrador[int(j,2)], 2)).value))
             coleta_indice.append(int(j,2))
@@ -2537,7 +2597,8 @@ def main():
         objregistradores.setRegistradorPC(cpu_pc)
         cpu_pc = int(registradores_32[pc], 2) + 4
         main_cash(cash_instrucao, registradores_32[pc], "I")
-        incrementa_Idade(cash_instrucao, registradores_32)
+        incrementa_Idade(cash_instrucao)
+        incrementa_Idade(cash_dado)
         if opRead(instrucaoAtual) == "111111" and int(lReadS(instrucaoAtual)[0]*6 + lReadS(instrucaoAtual), 2) == 0:
             inT(registradores_32, instrucaoAtual)
             print_terminal()
@@ -2547,6 +2608,7 @@ def main():
             testesInstrucoes(registradores_32, instrucaoAtual, memoria_32kbys)
             if obj_interrupt_hwe.get_watch_dog()[0] == "1":
                 fuction_watch_dog()
+        
     percent_hit()
     arquivo_saida.write("[END OF SIMULATION]\n")
     arquivo_saida.close()
@@ -2554,3 +2616,5 @@ def main():
 
 
 main()
+
+print(memoria_32kbys[int(0x00007FF0): int(0x00007FF0) + 16])
